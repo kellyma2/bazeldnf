@@ -21,6 +21,9 @@ bazel_dep(name = "bazel_features", version = "1.14.0")
 bazel_dep(name = "gazelle", version = "0.41.0")
 bazel_dep(name = "rules_go", version = "0.51.0")
 
+go_sdk = use_extension("@rules_go//go:extensions.bzl", "go_sdk")
+go_sdk.download(version = "1.22.9")
+
 go_deps = use_extension("@gazelle//:extensions.bzl", "go_deps")
 go_deps.from_file(go_mod = "//:go.mod")
 use_repo(
@@ -29,11 +32,11 @@ use_repo(
     "com_github_bazelbuild_buildtools",
     "com_github_crillab_gophersat",
     "com_github_onsi_gomega",
+    "com_github_protonmail_go_crypto",
     "com_github_sassoftware_go_rpmutils",
     "com_github_sirupsen_logrus",
     "com_github_spf13_cobra",
     "io_k8s_sigs_yaml",
-    "org_golang_x_crypto",
     "org_golang_x_exp",
 )
 

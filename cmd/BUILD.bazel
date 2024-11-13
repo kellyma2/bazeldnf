@@ -40,7 +40,7 @@ go_library(
         "@com_github_sassoftware_go_rpmutils//:go-rpmutils",
         "@com_github_sirupsen_logrus//:logrus",
         "@com_github_spf13_cobra//:cobra",
-        "@org_golang_x_crypto//openpgp",
+        "@com_github_protonmail_go_crypto//openpgp:go_default_library",
     ],
 )
 
