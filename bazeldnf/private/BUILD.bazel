@@ -6,3 +6,9 @@ bzl_library(
     visibility = ["//bazeldnf:__subpackages__"],
     deps = ["//bazeldnf:platforms"],
 )
+
+bzl_library(
+    name = "rpmtree_repository",
+    srcs = ["rpmtree_repository.bzl"],
+    visibility = ["//bazeldnf:__subpackages__"],
+)
