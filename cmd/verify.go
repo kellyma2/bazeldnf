@@ -13,7 +13,7 @@ import (
 	"github.com/sassoftware/go-rpmutils"
 	log "github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
-	"golang.org/x/crypto/openpgp"
+	"github.com/ProtonMail/go-crypto/openpgp"
 )
 
 type VerifyOpts struct {
