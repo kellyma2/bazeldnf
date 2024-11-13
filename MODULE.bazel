@@ -15,7 +15,7 @@ register_toolchains("@bazeldnf_toolchains//:all")
 
 bazel_dep(name = "bazel_skylib", version = "1.7.1")
 bazel_dep(name = "platforms", version = "0.0.10")
-bazel_dep(name = "bazel_features", version = "1.14.0")
+bazel_dep(name = "bazel_features", version = "1.20.0")
 
 # dependenices for building bazeldnf
 bazel_dep(name = "gazelle", version = "0.41.0")
