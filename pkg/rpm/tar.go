@@ -4,7 +4,6 @@ import (
 	"archive/tar"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"os"
 	"path/filepath"
 	"strings"
@@ -30,11 +29,11 @@ func (c *Collector) RPMToTar(rpmReader io.Reader, tarWriter *tar.Writer, noSymli
 	if err != nil {
 		return fmt.Errorf("failed to read rpm: %s", err)
 	}
-	payloadReader, err := rpm.RawUncompressedRPMPayloadReader()
+	cpioStream, err := rpm.CpioStream()
 	if err != nil {
-		return fmt.Errorf("failed to open the payload reader: %s", err)
+		return fmt.Errorf("failed to open the cpio stream: %s", err)
 	}
-	return Tar(payloadReader, tarWriter, noSymlinksAndDirs, capabilities, selinuxLabels, c.createdPaths)
+	return Tar(cpioStream, tarWriter, noSymlinksAndDirs, capabilities, selinuxLabels, c.createdPaths)
 }
 
 func RPMToCPIO(rpmReader io.Reader) (*cpio.CpioStream, error) {
@@ -42,11 +41,11 @@ func RPMToCPIO(rpmReader io.Reader) (*cpio.CpioStream, error) {
 	if err != nil {
 		return nil, fmt.Errorf("failed to read rpm: %s", err)
 	}
-	payloadReader, err := rpm.RawUncompressedRPMPayloadReader()
+	cpioStream, err := rpm.CpioStream()
 	if err != nil {
-		return nil, fmt.Errorf("failed to open the payload reader: %s", err)
+		return nil, fmt.Errorf("failed to open the cpio stream: %s", err)
 	}
-	return cpio.NewCpioStream(payloadReader), nil
+	return cpioStream, nil
 }
 
 func PrefixFilter(prefix string, reader *tar.Reader, files []string) error {
@@ -222,7 +221,7 @@ func CPIOToTarHeader(entry *cpio.CpioEntry) (*tar.Header, error) {
 	case cpio.S_ISLNK:
 		tarHeader.Typeflag = tar.TypeSymlink
 		tarHeader.Size = 0
-		buf, err := ioutil.ReadAll(entry.Payload)
+		buf, err := entry.ReadAll()
 		if err != nil {
 			return nil, err
 		}

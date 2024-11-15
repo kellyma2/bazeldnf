@@ -19,8 +19,6 @@ package rpm
 import (
 	"archive/tar"
 	"fmt"
-	"io"
-	"io/ioutil"
 	"sort"
 	"time"
 
@@ -30,14 +28,12 @@ import (
 )
 
 // Extract the contents of a cpio stream from and writes it as a tar file into the provided writer
-func Tar(rs io.Reader, tarfile *tar.Writer, noSymlinksAndDirs bool, capabilities map[string][]string, selinuxLabels map[string]string, createdPaths map[string]struct{}) error {
+func Tar(cs *cpio.CpioStream, tarfile *tar.Writer, noSymlinksAndDirs bool, capabilities map[string][]string, selinuxLabels map[string]string, createdPaths map[string]struct{}) error {
 	hardLinks := map[int][]*tar.Header{}
 	inodes := map[int]string{}
 
-	stream := cpio.NewCpioStream(rs)
-
 	for {
-		entry, err := stream.ReadNextEntry()
+		entry, err := cs.ReadNextEntry()
 		if err != nil {
 			return err
 		}
@@ -78,7 +74,7 @@ func Tar(rs io.Reader, tarfile *tar.Writer, noSymlinksAndDirs bool, capabilities
 			PAXRecords: pax,
 		}
 
-		var payload io.Reader
+		hasPayload := false
 		switch entry.Header.Mode() &^ 0o7777 {
 		case cpio.S_ISCHR:
 			tarHeader.Typeflag = tar.TypeChar
@@ -97,7 +93,7 @@ func Tar(rs io.Reader, tarfile *tar.Writer, noSymlinksAndDirs bool, capabilities
 			}
 			tarHeader.Typeflag = tar.TypeSymlink
 			tarHeader.Size = 0
-			buf, err := ioutil.ReadAll(entry.Payload)
+			buf, err := entry.ReadAll()
 			if err != nil {
 				return err
 			}
@@ -110,7 +106,7 @@ func Tar(rs io.Reader, tarfile *tar.Writer, noSymlinksAndDirs bool, capabilities
 				continue
 			}
 			tarHeader.Typeflag = tar.TypeReg
-			payload = entry.Payload
+			hasPayload = entry.HasPayload()
 			inodes[entry.Header.Ino()] = entry.Header.Filename()
 		default:
 			return fmt.Errorf("unknown file mode 0%o for %s",
@@ -119,8 +115,8 @@ func Tar(rs io.Reader, tarfile *tar.Writer, noSymlinksAndDirs bool, capabilities
 		if err := tarfile.WriteHeader(tarHeader); err != nil {
 			return fmt.Errorf("could not write tar header for %v: %v", tarHeader.Name, err)
 		}
-		if payload != nil {
-			written, err := io.Copy(tarfile, entry.Payload)
+		if hasPayload {
+			written, err := entry.Copy(tarfile)
 			if err != nil {
 				return fmt.Errorf("could not write body for %v: %v", tarHeader.Name, err)
 			}
