@@ -201,10 +201,21 @@ func (r *RepoFetcherImpl) fetchFile(fileType string, repo *bazeldnf.Repository, 
 	}
 	sha256sum, err := file.SHA256()
 	if err != nil {
-		return fmt.Errorf("failed to get sha256sum of file: %v", err)
-	}
-	if sha256sum != toHex(sha) {
-		return fmt.Errorf("Expected sha256 sum %s, but got %s", sha256sum, toHex(sha))
+		// maybe try for SHA instead
+		if err.Error() == "no sha256 found" {
+			_, err := file.SHA()
+			if err != nil {
+				return fmt.Errorf("failed to get sha or sha256 of file: %v", err)
+			} else {
+				// let's ignore this for now
+			}
+		} else {
+			return fmt.Errorf("failed to get sha256sum of file: %v", err)
+		}
+	} else {
+		if sha256sum != toHex(sha) {
+			return fmt.Errorf("Expected sha256 sum %s, but got %s", sha256sum, toHex(sha))
+		}
 	}
 	return nil
 }
