@@ -38,3 +38,4 @@ require (
 )
 
 replace github.com/sassoftware/go-rpmutils v0.4.0 => /Users/mkelly/Projects/github.com/sassoftware/go-rpmutils
+

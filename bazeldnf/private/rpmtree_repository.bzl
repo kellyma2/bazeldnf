@@ -6,7 +6,6 @@ bazeldnf fetch + bazeldnf rpmtree process
 
 def _rpmtree_repository_impl(rctx):
     tool_path = rctx.path(rctx.attr.bazeldnf)
-    rctx.watch_tree(tool_path.dirname)
 
     rctx.file("WORKSPACE")
 
