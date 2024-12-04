@@ -34,7 +34,7 @@ _alias_repository = repository_rule(
 
 _DEFAULT_NAME = "bazeldnf"
 
-def _gen_lock_file(mctx, configname, bazeldnf_tool, lock_file, repo_file, basesystem, rpms):
+def _gen_lock_file(mctx, configname, bazeldnf_tool, lock_file, repo_file, basesystem, rpms, only_allow):
     tool_path = mctx.path(bazeldnf_tool)
 
     out = mctx.execute(
@@ -60,7 +60,12 @@ def _gen_lock_file(mctx, configname, bazeldnf_tool, lock_file, repo_file, basesy
         mctx.path(lock_file),
         "--basesystem",
         basesystem,
-    ] + rpms
+    ]
+
+    for item in only_allow:
+        args += ["--only-allow", item]
+
+    args += rpms
 
     out = mctx.execute(args)
     if out.stderr and out.return_code != 0:
@@ -95,6 +100,7 @@ def _handle_rpmtree_repository(name, mctx, rpms_file, repo_file, bazeldnf_tool, 
     rpms_file_json = json.decode(content)
 
     rpms = []
+    only_allow = []
 
     rpmtree_repository(
         name = name,
@@ -107,8 +113,9 @@ def _handle_rpmtree_repository(name, mctx, rpms_file, repo_file, bazeldnf_tool, 
 
     for rpm in rpms_file_json.get("rpms", []):
         rpms.extend(rpm["rpms"])
+        only_allow.extend(rpm.get("only_allow", []))
 
-    _gen_lock_file(mctx, name + "_rpms", bazeldnf_tool, lock_file, repo_file, basesystem, rpms)
+    _gen_lock_file(mctx, name + "_rpms", bazeldnf_tool, lock_file, repo_file, basesystem, rpms, only_allow)
 
     return [name]
 
