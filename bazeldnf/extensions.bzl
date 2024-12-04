@@ -6,6 +6,7 @@ based on: https://github.com/bazel-contrib/rules-template/blob/0dadcb716f06f6728
 """
 
 load("@bazel_features//:features.bzl", "bazel_features")
+load("//bazeldnf/private:rpmtree_repository.bzl", "rpmtree_repository")
 load("//internal:rpm.bzl", rpm_repository = "rpm")
 load(":repositories.bzl", "bazeldnf_register_toolchains")
 
@@ -33,6 +34,38 @@ _alias_repository = repository_rule(
 
 _DEFAULT_NAME = "bazeldnf"
 
+def _gen_lock_file(mctx, configname, bazeldnf_tool, lock_file, repo_file, basesystem, rpms):
+    tool_path = mctx.path(bazeldnf_tool)
+
+    out = mctx.execute(
+        [
+            tool_path,
+            "fetch",
+            "--repofile",
+            mctx.path(repo_file),
+        ],
+    )
+
+    if out.stderr and out.return_code != 0:
+        fail("Error executing fetch: " + out.stderr)
+
+    args = [
+        tool_path,
+        "lockfile",
+        "--configname",
+        configname,
+        "--repofile",
+        mctx.path(repo_file),
+        "--lockfile",
+        mctx.path(lock_file),
+        "--basesystem",
+        basesystem,
+    ] + rpms
+
+    out = mctx.execute(args)
+    if out.stderr and out.return_code != 0:
+        fail("Error generating lockfile: " + out.stderr)
+
 def _handle_lock_file(lock_file, module_ctx):
     content = module_ctx.read(lock_file)
     lock_file_json = json.decode(content)
@@ -56,6 +89,28 @@ def _handle_lock_file(lock_file, module_ctx):
     )
 
     return name
+
+def _handle_rpmtree_repository(name, mctx, rpms_file, repo_file, bazeldnf_tool, lock_file, basesystem):
+    content = mctx.read(mctx.path(rpms_file))
+    rpms_file_json = json.decode(content)
+
+    rpms = []
+
+    rpmtree_repository(
+        name = name,
+        configname = name + "_rpms",
+        repo_file = repo_file,
+        rpms_file = rpms_file,
+        bazeldnf = bazeldnf_tool,
+        basesystem = basesystem,
+    )
+
+    for rpm in rpms_file_json.get("rpms", []):
+        rpms.extend(rpm["rpms"])
+
+    _gen_lock_file(mctx, name + "_rpms", bazeldnf_tool, lock_file, repo_file, basesystem, rpms)
+
+    return [name]
 
 def _toolchain_extension(module_ctx):
     repos = []
@@ -106,6 +161,11 @@ def _toolchain_extension(module_ctx):
                 rpms = ["@@%s//rpm" % x for x in rpms],
             )
             repos.append(name)
+
+        rpmtrees = []
+        for rpmtree in mod.tags.rpmtree:
+            repos.extend(_handle_rpmtree_repository(rpmtree.name, module_ctx, rpmtree.rpms_file, rpmtree.repo_file, rpmtree.bazeldnf, rpmtree.lock_file, rpmtree.basesystem))
+            repos.append(_handle_lock_file(rpmtree.lock_file, module_ctx))
 
     kwargs = {}
     if bazel_features.external_deps.extension_metadata_has_reproducible:
@@ -196,11 +256,28 @@ The lock file content is as:
     },
 )
 
+_rpmtree_tag = tag_class(
+    attrs = {
+        "name": attr.string(),
+        "lock_file": attr.label(),
+        "rpms_file": attr.label(),
+        "repo_file": attr.label(
+            doc = """\
+Label of the YAML file that contains the DNF repo configuration.\
+""",
+            allow_single_file = [".yaml"],
+        ),
+        "bazeldnf": attr.label(),
+        "basesystem": attr.string(),
+    },
+)
+
 bazeldnf = module_extension(
     implementation = _toolchain_extension,
     tag_classes = {
         "toolchain": _toolchain_tag,
         "rpm": _rpm_tag,
         "config": _config_tag,
+        "rpmtree": _rpmtree_tag,
     },
 )
