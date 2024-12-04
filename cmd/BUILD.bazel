@@ -9,6 +9,7 @@ go_library(
         "filter.go",
         "init.go",
         "ldd.go",
+        "lockfile.go",
         "prune.go",
         "reduce.go",
         "resolve.go",
