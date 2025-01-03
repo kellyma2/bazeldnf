@@ -47,7 +47,7 @@ func NewResolveCmd() *cobra.Command {
 				return err
 			}
 			logrus.Info("Initial reduction of involved packages.")
-			matched, involved, err := repo.Resolve(required)
+			matched, involved, err := repo.Resolve(required, false)
 			if err != nil {
 				return err
 			}

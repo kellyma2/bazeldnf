@@ -41,23 +41,7 @@ func NewLockFileCmd() *cobra.Command {
 				return err
 			}
 			logrus.Info("Initial reduction of involved packages.")
-			matched, involved, err := repoReducer.Resolve(required)
-			if err != nil {
-				return err
-			}
-			solver := sat.NewResolver(lockfileopts.nobest)
-			logrus.Info("Loading involved packages into the lock file builder.")
-			err = solver.LoadInvolvedPackages(involved, lockfileopts.dontAllowRegex, lockfileopts.onlyAllowRegex)
-			if err != nil {
-				return err
-			}
-			logrus.Info("Adding required packages to the lock file builder.")
-			err = solver.ConstructRequirements(matched)
-			if err != nil {
-				return err
-			}
-			logrus.Info("Solving.")
-			install, _, _, err := solver.Resolve()
+			matched, involved, err := repoReducer.Resolve(required, true)
 			if err != nil {
 				return err
 			}
@@ -66,10 +50,28 @@ func NewLockFileCmd() *cobra.Command {
 				Name: lockfileopts.configname,
 				RPMs: []bazeldnf.RPM{},
 			}
+			if len(matched) > 0 {
+				solver := sat.NewResolver(lockfileopts.nobest)
+				logrus.Info("Loading involved packages into the lock file builder.")
+				err = solver.LoadInvolvedPackages(involved, lockfileopts.dontAllowRegex, lockfileopts.onlyAllowRegex)
+				if err != nil {
+					return err
+				}
+				logrus.Info("Adding required packages to the lock file builder.")
+				err = solver.ConstructRequirements(matched)
+				if err != nil {
+					return err
+				}
+				logrus.Info("Solving.")
+				install, _, _, err := solver.Resolve()
+				if err != nil {
+					return err
+				}
 
-			err = bazel.AddConfigRPMs(config, install, lockfileopts.arch)
-			if err != nil {
-				return err
+				err = bazel.AddConfigRPMs(config, install, lockfileopts.arch)
+				if err != nil {
+					return err
+				}
 			}
 
 			logrus.Info("Writing bazel files.")

@@ -171,6 +171,10 @@ def _toolchain_extension(module_ctx):
 
         rpmtrees = []
         for rpmtree in mod.tags.rpmtree:
+            module_ctx.watch(module_ctx.path(rpmtree.repo_file))
+            module_ctx.watch(module_ctx.path(rpmtree.rpms_file))
+            module_ctx.watch(module_ctx.path(rpmtree.bazeldnf))
+
             repos.extend(_handle_rpmtree_repository(rpmtree.name, module_ctx, rpmtree.rpms_file, rpmtree.repo_file, rpmtree.bazeldnf, rpmtree.lock_file, rpmtree.basesystem))
             repos.append(_handle_lock_file(rpmtree.lock_file, module_ctx))
 

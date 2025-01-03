@@ -78,7 +78,7 @@ func (r *RepoReducer) Load() error {
 	return nil
 }
 
-func (r *RepoReducer) Resolve(packages []string) (matched []string, involved []*api.Package, err error) {
+func (r *RepoReducer) Resolve(packages []string, ignoreMissing bool) (matched []string, involved []*api.Package, err error) {
 	packages = append(packages, r.implicitRequires...)
 	discovered := map[string]*api.Package{}
 	pinned := map[string]*api.Package{}
@@ -99,7 +99,7 @@ func (r *RepoReducer) Resolve(packages []string) (matched []string, involved []*
 				}
 			}
 		}
-		if !found {
+		if !found && !ignoreMissing {
 			return nil, nil, fmt.Errorf("Package %s does not exist", req)
 		}
 

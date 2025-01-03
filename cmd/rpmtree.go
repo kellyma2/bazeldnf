@@ -149,23 +149,7 @@ func NewRpmTreeCmd() *cobra.Command {
 				return err
 			}
 			logrus.Info("Initial reduction of involved packages.")
-			matched, involved, err := repoReducer.Resolve(required)
-			if err != nil {
-				return err
-			}
-			solver := sat.NewResolver(rpmtreeopts.nobest)
-			logrus.Info("Loading involved packages into the rpmtreer.")
-			err = solver.LoadInvolvedPackages(involved, rpmtreeopts.forceIgnoreRegex, rpmtreeopts.onlyAllowRegex)
-			if err != nil {
-				return err
-			}
-			logrus.Info("Adding required packages to the rpmtreer.")
-			err = solver.ConstructRequirements(matched)
-			if err != nil {
-				return err
-			}
-			logrus.Info("Solving.")
-			install, _, forceIgnored, err := solver.Resolve()
+			matched, involved, err := repoReducer.Resolve(required, true)
 			if err != nil {
 				return err
 			}
@@ -185,21 +169,46 @@ func NewRpmTreeCmd() *cobra.Command {
 				handler, err = NewWorkspaceHandler(rpmtreeopts.workspace)
 			}
 
-			if err != nil {
-				return err
-			}
-
 			build, err := bazel.LoadBuild(rpmtreeopts.buildfile)
 			if err != nil {
 				return err
 			}
 
-			err = handler.AddRPMs(install, rpmtreeopts.arch)
-			if err != nil {
-				return err
+			var pkgs []*api.Package
+
+			if len(matched) > 0 {
+				solver := sat.NewResolver(rpmtreeopts.nobest)
+				logrus.Info("Loading involved packages into the rpmtreer.")
+				err = solver.LoadInvolvedPackages(involved, rpmtreeopts.forceIgnoreRegex, rpmtreeopts.onlyAllowRegex)
+				if err != nil {
+					return err
+				}
+				logrus.Info("Adding required packages to the rpmtreer.")
+				err = solver.ConstructRequirements(matched)
+				if err != nil {
+					return err
+				}
+				logrus.Info("Solving.")
+				install, _, forceIgnored, err := solver.Resolve()
+				if err != nil {
+					return err
+				}
+				pkgs = install
+
+				if err != nil {
+					return err
+				}
+
+				err = handler.AddRPMs(install, rpmtreeopts.arch)
+				if err != nil {
+					return err
+				}
+				if err := template.Render(os.Stdout, install, forceIgnored); err != nil {
+					return err
+				}
 			}
 
-			bazel.AddTree(rpmtreeopts.name, configname, build, install, rpmtreeopts.arch, rpmtreeopts.public)
+			bazel.AddTree(rpmtreeopts.name, configname, build, pkgs, rpmtreeopts.arch, rpmtreeopts.public)
 
 			handler.PruneRPMs(build)
 			logrus.Info("Writing bazel files.")
@@ -210,9 +219,6 @@ func NewRpmTreeCmd() *cobra.Command {
 
 			err = bazel.WriteBuild(false, build, rpmtreeopts.buildfile)
 			if err != nil {
-				return err
-			}
-			if err := template.Render(os.Stdout, install, forceIgnored); err != nil {
 				return err
 			}
 

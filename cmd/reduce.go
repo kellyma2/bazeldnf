@@ -49,7 +49,7 @@ which allow reducing huge rpm repos to a smaller problem set for debugging, remo
 				return err
 			}
 			logrus.Info("Reduction of involved packages.")
-			_, involved, err := repo.Resolve(required)
+			_, involved, err := repo.Resolve(required, true)
 			if err != nil {
 				return err
 			}
