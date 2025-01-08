@@ -112,7 +112,7 @@ def _gen_lock_file(mctx, configname, bazeldnf_tool, lock_file, repo_file, basesy
         "--repofile",
         mctx.path(repo_file),
         "--lockfile",
-        mctx.path(lock_file),
+        lock_file,
         "--basesystem",
         basesystem,
     ]
@@ -126,10 +126,10 @@ def _gen_lock_file(mctx, configname, bazeldnf_tool, lock_file, repo_file, basesy
     if out.stderr and out.return_code != 0:
         fail("Error generating lockfile: " + out.stderr)
 
-def _handle_lock_file(lock_file, module_ctx):
+def _handle_lock_file(lock_file, file_name, module_ctx):
     content = module_ctx.read(lock_file)
     lock_file_json = json.decode(content)
-    name = lock_file_json.get("name", lock_file.name.rsplit(".json", 1)[0])
+    name = lock_file_json.get("name", file_name.rsplit(".json", 1)[0])
 
     rpms = []
 
@@ -185,7 +185,7 @@ def _toolchain_extension(module_ctx):
                 legacy = False
                 name = config.name or name
             if config.lock_file:
-                repos.append(_handle_lock_file(config.lock_file, module_ctx))
+                repos.append(_handle_lock_file(config.lock_file, lock_file.name, module_ctx))
 
         rpms = []
 
@@ -215,8 +215,9 @@ def _toolchain_extension(module_ctx):
             module_ctx.watch(module_ctx.path(rpmtree.rpms_file))
             module_ctx.watch(module_ctx.path(rpmtree.bazeldnf))
 
-            repos.extend(_handle_rpmtree_repository(rpmtree.name, module_ctx, rpmtree.rpms_file, rpmtree.repo_file, rpmtree.bazeldnf, rpmtree.lock_file, rpmtree.basesystem))
-            repos.append(_handle_lock_file(rpmtree.lock_file, module_ctx))
+            lock_file = module_ctx.path("config.json")
+            repos.extend(_handle_rpmtree_repository(rpmtree.name, module_ctx, rpmtree.rpms_file, rpmtree.repo_file, rpmtree.bazeldnf, lock_file, rpmtree.basesystem))
+            repos.append(_handle_lock_file(lock_file, lock_file.basename, module_ctx))
 
     kwargs = {}
     if bazel_features.external_deps.extension_metadata_has_reproducible:
@@ -296,7 +297,6 @@ The lock file content is as:
 _rpmtree_tag = tag_class(
     attrs = {
         "name": attr.string(),
-        "lock_file": attr.label(),
         "rpms_file": attr.label(),
         "repo_file": attr.label(
             doc = """\
