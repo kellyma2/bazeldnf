@@ -1,9 +1,7 @@
 package reducer
 
 import (
-	"encoding/xml"
 	"fmt"
-	"os"
 	"strings"
 
 	"github.com/rmohr/bazeldnf/pkg/api"
@@ -13,68 +11,17 @@ import (
 )
 
 type RepoReducer struct {
-	packages         []api.Package
-	lang             string
-	repoFiles        []string
-	provides         map[string][]*api.Package
+	packageInfo      *packageInfo
 	implicitRequires []string
-	arch             string
-	architectures    []string
-	repos            *bazeldnf.Repositories
-	cacheHelper      *repo.CacheHelper
+	loader           ReducerPackageLoader
 }
 
 func (r *RepoReducer) Load() error {
-	for _, rpmrepo := range r.repoFiles {
-		repoFile := &api.Repository{}
-		f, err := os.Open(rpmrepo)
-		if err != nil {
-			return err
-		}
-		defer f.Close()
-		err = xml.NewDecoder(f).Decode(repoFile)
-		if err != nil {
-			return err
-		}
-		for i, p := range repoFile.Packages {
-			if skip(p.Arch, r.architectures) {
-				continue
-			}
-			r.packages = append(r.packages, repoFile.Packages[i])
-		}
-	}
-	repos, err := r.cacheHelper.CurrentPrimaries(r.repos, r.arch)
+	packageInfo, err := r.loader.Load()
 	if err != nil {
 		return err
 	}
-	for _, rpmrepo := range repos {
-		for i, p := range rpmrepo.Packages {
-			if skip(p.Arch, r.architectures) {
-				continue
-			}
-			r.packages = append(r.packages, rpmrepo.Packages[i])
-		}
-	}
-	for i, _ := range r.packages {
-		FixPackages(&r.packages[i])
-	}
-
-	for i, p := range r.packages {
-		requires := []api.Entry{}
-		for _, requirement := range p.Format.Requires.Entries {
-			if !strings.HasPrefix(requirement.Name, "(") {
-				requires = append(requires, requirement)
-			}
-		}
-		r.packages[i].Format.Requires.Entries = requires
-
-		for _, provides := range p.Format.Provides.Entries {
-			r.provides[provides.Name] = append(r.provides[provides.Name], &r.packages[i])
-		}
-		for _, file := range p.Format.Files {
-			r.provides[file.Text] = append(r.provides[file.Text], &r.packages[i])
-		}
-	}
+	r.packageInfo = packageInfo
 	return nil
 }
 
@@ -86,15 +33,15 @@ func (r *RepoReducer) Resolve(packages []string) (matched []string, involved []*
 		found := false
 		name := ""
 		var candidates []*api.Package
-		for i, p := range r.packages {
+		for i, p := range r.packageInfo.packages {
 			if strings.HasPrefix(p.String(), req) {
 				if strings.HasPrefix(req, p.Name) {
 					if !found || len(p.Name) < len(name) {
-						candidates = []*api.Package{&r.packages[i]}
+						candidates = []*api.Package{&r.packageInfo.packages[i]}
 						name = p.Name
 						found = true
 					} else if p.Name == name {
-						candidates = append(candidates, &r.packages[i])
+						candidates = append(candidates, &r.packageInfo.packages[i])
 					}
 				}
 			}
@@ -102,8 +49,15 @@ func (r *RepoReducer) Resolve(packages []string) (matched []string, involved []*
 		if !found {
 			return nil, nil, fmt.Errorf("Package %s does not exist", req)
 		}
+
 		for i, p := range candidates {
-			discovered[p.String()] = candidates[i]
+			if selected, ok := discovered[p.String()]; !ok {
+				discovered[p.String()] = candidates[i]
+			} else {
+				if selected.Repository.Priority > p.Repository.Priority {
+					discovered[p.String()] = candidates[i]
+				}
+			}
 		}
 
 		if len(candidates) > 0 {
@@ -159,7 +113,7 @@ func (r *RepoReducer) Resolve(packages []string) (matched []string, involved []*
 
 func (r *RepoReducer) requires(p *api.Package) (wants []*api.Package) {
 	for _, requires := range p.Format.Requires.Entries {
-		if val, exists := r.provides[requires.Name]; exists {
+		if val, exists := r.packageInfo.provides[requires.Name]; exists {
 
 			var packages []string
 			for _, p := range val {
@@ -174,45 +128,16 @@ func (r *RepoReducer) requires(p *api.Package) (wants []*api.Package) {
 	return wants
 }
 
-func NewRepoReducer(repos *bazeldnf.Repositories, repoFiles []string, lang string, baseSystem string, arch string, cachDir string) *RepoReducer {
+func NewRepoReducer(repos *bazeldnf.Repositories, repoFiles []string, baseSystem string, arch string, cacheHelper *repo.CacheHelper) *RepoReducer {
 	return &RepoReducer{
-		packages:         nil,
-		lang:             lang,
+		packageInfo:      nil,
 		implicitRequires: []string{baseSystem},
-		repoFiles:        repoFiles,
-		provides:         map[string][]*api.Package{},
-		architectures:    []string{"noarch", arch},
-		arch:             arch,
-		repos:            repos,
-		cacheHelper:      &repo.CacheHelper{CacheDir: cachDir},
-	}
-}
-
-func skip(arch string, arches []string) bool {
-	skip := true
-	for _, a := range arches {
-		if a == arch {
-			skip = false
-			break
-		}
-	}
-	return skip
-}
-
-// FixPackages contains hacks which should probably not have to exist
-func FixPackages(p *api.Package) {
-	// FIXME: This is not a proper modules support for python. We should properly resolve `alternative(python)` and
-	// not have to add such a hack. On the other hand this seems to have been reverted in fedora and only exists in centos stream.
-	if p.Name == "platform-python" {
-		p.Format.Provides.Entries = append(p.Format.Provides.Entries, api.Entry{
-			Name: "/usr/libexec/platform-python",
-		})
-		var requires []api.Entry
-		for _, entry := range p.Format.Requires.Entries {
-			if entry.Name != "/usr/libexec/platform-python" {
-				requires = append(requires, entry)
-			}
-		}
-		p.Format.Requires.Entries = requires
+		loader: RepoLoader{
+			repoFiles:     repoFiles,
+			architectures: []string{"noarch", arch},
+			arch:          arch,
+			repos:         repos,
+			cacheHelper:   cacheHelper,
+		},
 	}
 }

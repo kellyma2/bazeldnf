@@ -14,7 +14,6 @@ import (
 
 type resolveOpts struct {
 	in               []string
-	lang             string
 	nobest           bool
 	arch             string
 	baseSystem       string
@@ -41,13 +40,14 @@ func NewResolveCmd() *cobra.Command {
 					return err
 				}
 			}
-			repo := reducer.NewRepoReducer(repos, resolveopts.in, resolveopts.lang, resolveopts.baseSystem, resolveopts.arch, ".bazeldnf")
+			repo := reducer.NewRepoReducer(repos, resolveopts.in, resolveopts.baseSystem, resolveopts.arch, repo.NewCacheHelper())
 			logrus.Info("Loading packages.")
 			if err := repo.Load(); err != nil {
 				return err
 			}
 			logrus.Info("Initial reduction of involved packages.")
 			matched, involved, err := repo.Resolve(required)
+
 			if err != nil {
 				return err
 			}
@@ -86,5 +86,7 @@ func NewResolveCmd() *cobra.Command {
 	resolveCmd.Flags().MarkDeprecated("fedora-base-system", "use --basesystem instead")
 	resolveCmd.Flags().MarkShorthandDeprecated("fedora-base-system", "use --basesystem instead")
 	resolveCmd.Flags().MarkShorthandDeprecated("nobest", "use --nobest instead")
+	repo.AddCacheHelperFlags(resolveCmd)
+
 	return resolveCmd
 }
